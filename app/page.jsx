@@ -8,13 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export default function Login() {
-
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState("");
   const [password, setPassword] = useState("");
 
   async function handleLogin() {
-
     const empId = employeeId.trim();
     const pwd = password.trim();
 
@@ -40,6 +38,7 @@ export default function Login() {
 
     localStorage.setItem("employeeName", data[0].name);
     localStorage.setItem("employeeId", data[0].employee_id);
+    localStorage.setItem("role", "employee");
 
     router.push("/dashboard");
   }
@@ -62,7 +61,7 @@ export default function Login() {
         />
 
         <Button
-          className="w-full bg-purple-600"
+          className="w-full bg-purple-600 hover:bg-purple-700"
           onClick={handleLogin}
         >
           Login
@@ -76,6 +75,17 @@ export default function Login() {
             onClick={() => router.push("/signup")}
           >
             Sign Up
+          </span>
+        </p>
+
+        {/* 👇 ADMIN LOGIN LINK (ADDED — UI SAFE) */}
+        <p className="text-center text-sm text-gray-500">
+          Are you an admin?{" "}
+          <span
+            className="text-purple-600 cursor-pointer font-semibold"
+            onClick={() => router.push("/admin/login")}
+          >
+            Login here
           </span>
         </p>
 

@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import Logo from "@/app/components/Logo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function AdminLogin() {
 
@@ -12,41 +13,55 @@ export default function AdminLogin() {
 
   const [adminId, setAdminId] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const ADMIN_ID = "ADMIN001";
-  const ADMIN_PASSWORD = "admin123";
-
-  /* ⭐ Auto Redirect If Already Logged In */
+  /* ================= AUTO REDIRECT ================= */
   useEffect(() => {
 
+    const isLoggedIn = localStorage.getItem("isLoggedIn");
     const role = localStorage.getItem("role");
 
-    if (role === "admin") router.push("/admin/dashboard");
-    if (role === "employee") router.push("/dashboard");
+    if (isLoggedIn === "true" && role === "admin") {
+      router.replace("/admin/dashboard");
+    }
 
-  }, []);
+    if (isLoggedIn === "true" && role === "employee") {
+      router.replace("/dashboard");
+    }
 
-  function handleAdminLogin() {
+  }, [router]);
+
+  /* ================= ADMIN LOGIN ================= */
+  async function handleAdminLogin() {
 
     if (!adminId || !password) {
-      alert("Please enter credentials");
+      alert("Fill all fields");
       return;
     }
 
-    if (adminId === ADMIN_ID && password === ADMIN_PASSWORD) {
+    setLoading(true);
 
-      /* CLEAR OLD SESSION */
-      localStorage.clear();
+    const { data, error } = await supabase
+      .from("admins")
+      .select("*")
+      .eq("admin_id", adminId)
+      .eq("password", password)
+      .single();
 
-      localStorage.setItem("employeeName", "Admin User");
-      localStorage.setItem("employeeId", ADMIN_ID);
-      localStorage.setItem("role", "admin");
-
-      router.push("/admin/dashboard");
+    if (error || !data) {
+      alert("Invalid Admin Credentials");
+      setLoading(false);
       return;
     }
 
-    alert("Invalid Admin Credentials");
+    // Save session
+    localStorage.clear();
+    localStorage.setItem("isLoggedIn", "true");
+    localStorage.setItem("role", "admin");
+    localStorage.setItem("employeeName", data.name);
+    localStorage.setItem("employeeId", data.admin_id);
+
+    router.replace("/admin/dashboard");
   }
 
   return (
@@ -54,12 +69,15 @@ export default function AdminLogin() {
 
       <div className="bg-white p-8 rounded-2xl shadow-lg w-[380px] space-y-5">
 
+        {/* LOGO */}
         <Logo />
 
-        <h2 className="text-xl font-semibold text-center">
+        {/* TITLE */}
+        <h2 className="text-center text-lg font-semibold text-gray-800">
           Admin Login
         </h2>
 
+        {/* INPUTS */}
         <Input
           placeholder="Admin ID"
           value={adminId}
@@ -73,28 +91,23 @@ export default function AdminLogin() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        {/* Demo Credentials */}
-        <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm text-blue-700">
-          <p className="font-semibold">Demo Admin Credentials</p>
-          <p>ID: <b>{ADMIN_ID}</b></p>
-          <p>Password: <b>{ADMIN_PASSWORD}</b></p>
-        </div>
-
+        {/* LOGIN BUTTON */}
         <Button
-          className="w-full bg-red-600 hover:bg-red-700"
+          className="w-full bg-purple-600 hover:bg-purple-700"
           onClick={handleAdminLogin}
+          disabled={loading}
         >
-          Login as Admin
+          {loading ? "Logging in..." : "Login"}
         </Button>
 
-        {/* 🔗 BACK TO EMPLOYEE LOGIN */}
-        <p className="text-center text-sm text-gray-500">
-          Employee Login?{" "}
+        {/* BACK TO EMPLOYEE LOGIN */}
+        <p className="text-center text-sm text-gray-600">
+          Are you an employee?{" "}
           <span
-            onClick={() => router.push("/login")}
-            className="text-blue-600 cursor-pointer font-medium"
+            onClick={() => router.push("/")}
+            className="text-purple-600 cursor-pointer font-semibold"
           >
-            Click Here
+            Login here
           </span>
         </p>
 
@@ -102,3 +115,6 @@ export default function AdminLogin() {
     </div>
   );
 }
+
+//Admin ID: ADMIN001
+//Password: admin123
