@@ -8,86 +8,86 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function SettingsPage() {
-
   const router = useRouter();
 
-  const [employeeId, setEmployeeId] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [employeeName, setEmployeeName] = useState("");
 
   /* PASSWORD STATE */
   const [passwordData, setPasswordData] = useState({
     current: "",
     newPass: "",
-    confirm: ""
+    confirm: "",
   });
 
   /* NOTIFICATION STATE */
   const [notifications, setNotifications] = useState({
     email: true,
     leave: true,
-    attendance: false
+    attendance: false,
   });
 
-  /* LOAD EMPLOYEE ID SAFELY */
+  /* LOAD AUTH USER */
   useEffect(() => {
-    const id = localStorage.getItem("employeeId");
-    setEmployeeId(id);
-  }, []);
+    async function loadUser() {
+      const { data: auth } = await supabase.auth.getUser();
 
-  /* LOAD NOTIFICATIONS FROM SUPABASE */
-  useEffect(() => {
-
-    if (!employeeId) return;
-
-    async function fetchNotifications() {
-
-      const { data, error } = await supabase
-        .from("notification_settings")
-        .select("*")
-        .eq("employee_id", employeeId)
-        .limit(1);
-
-      if (error) {
-        console.error("Notification fetch error:", error);
+      if (!auth?.user) {
+        router.push("/");
         return;
       }
 
-      if (data.length === 0) {
-        // create default row
-        await supabase.from("notification_settings").insert([
-          { employee_id: employeeId }
-        ]);
+      setUserId(auth.user.id);
+
+      // fetch employee profile
+      const { data } = await supabase
+        .from("employees")
+        .select("name")
+        .eq("id", auth.user.id)
+        .single();
+
+      if (data) setEmployeeName(data.name);
+    }
+
+    loadUser();
+  }, [router]);
+
+  /* LOAD NOTIFICATIONS */
+  useEffect(() => {
+    if (!userId) return;
+
+    async function fetchNotifications() {
+      const { data } = await supabase
+        .from("notification_settings")
+        .select("*")
+        .eq("employee_id", userId)
+        .single();
+
+      if (!data) {
+        await supabase.from("notification_settings").insert({
+          employee_id: userId,
+        });
         return;
       }
 
       setNotifications({
-        email: data[0].email,
-        leave: data[0].leave,
-        attendance: data[0].attendance
+        email: data.email,
+        leave: data.leave,
+        attendance: data.attendance,
       });
     }
 
     fetchNotifications();
+  }, [userId]);
 
-  }, [employeeId]);
-
-  /* HANDLE PASSWORD INPUT */
+  /* PASSWORD INPUT */
   function handlePasswordChange(e) {
-    setPasswordData({
-      ...passwordData,
-      [e.target.name]: e.target.value
-    });
+    setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
   }
 
-  /* UPDATE PASSWORD */
+  /* UPDATE PASSWORD (SUPABASE AUTH) */
   async function updatePassword() {
-
-    if (!employeeId) return;
-
-    if (
-      !passwordData.current ||
-      !passwordData.newPass ||
-      !passwordData.confirm
-    ) {
+    if (!passwordData.newPass || !passwordData.confirm) {
       alert("Please fill all fields");
       return;
     }
@@ -97,90 +97,52 @@ export default function SettingsPage() {
       return;
     }
 
-    const { data } = await supabase
-      .from("employees")
-      .select("password")
-      .eq("employee_id", employeeId)
-      .limit(1);
-
-    if (!data || data.length === 0 || data[0].password !== passwordData.current) {
-      alert("Current password is incorrect");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("employees")
-      .update({ password: passwordData.newPass })
-      .eq("employee_id", employeeId);
+    const { error } = await supabase.auth.updateUser({
+      password: passwordData.newPass,
+    });
 
     if (error) {
-      alert("Failed to update password");
+      alert(error.message);
       return;
     }
 
     alert("Password updated successfully");
-
-    setPasswordData({
-      current: "",
-      newPass: "",
-      confirm: ""
-    });
+    setPasswordData({ current: "", newPass: "", confirm: "" });
   }
 
   /* TOGGLE NOTIFICATIONS */
   async function toggleNotification(type) {
-
-    if (!employeeId) return;
-
-    const updated = {
-      ...notifications,
-      [type]: !notifications[type]
-    };
-
+    const updated = { ...notifications, [type]: !notifications[type] };
     setNotifications(updated);
 
     await supabase
       .from("notification_settings")
       .update(updated)
-      .eq("employee_id", employeeId);
+      .eq("employee_id", userId);
   }
 
   /* LOGOUT */
-  function handleLogout() {
-    localStorage.clear();
+  async function handleLogout() {
+    await supabase.auth.signOut();
     router.push("/");
   }
 
   return (
     <div className="flex">
-
       <Sidebar />
 
       <div className="flex-1 bg-gray-50 min-h-screen">
-
-        <Header name={localStorage.getItem("employeeName")} />
+        <Header name={employeeName} />
 
         <div className="p-8 space-y-8">
-
           <h1 className="text-3xl font-bold">Settings</h1>
 
           {/* PASSWORD */}
           <div className="bg-white rounded-xl shadow p-6">
             <div className="flex items-center gap-2 mb-4">
               <Lock className="text-blue-600" />
-              <h2 className="text-xl font-semibold">
-                Change Password
-              </h2>
+              <h2 className="text-xl font-semibold">Change Password</h2>
             </div>
-
-            <input
-              type="password"
-              name="current"
-              placeholder="Current password"
-              value={passwordData.current}
-              onChange={handlePasswordChange}
-              className="w-full border rounded-lg p-3 mb-3"
-            />
 
             <input
               type="password"
@@ -212,9 +174,7 @@ export default function SettingsPage() {
           <div className="bg-white rounded-xl shadow p-6">
             <div className="flex items-center gap-2 mb-4">
               <Bell className="text-blue-600" />
-              <h2 className="text-xl font-semibold">
-                Notification Preferences
-              </h2>
+              <h2 className="text-xl font-semibold">Notification Preferences</h2>
             </div>
 
             <ToggleRow
@@ -249,14 +209,13 @@ export default function SettingsPage() {
               Logout
             </button>
           </div>
-
         </div>
       </div>
     </div>
   );
 }
 
-/* Toggle Component */
+/* TOGGLE */
 function ToggleRow({ title, description, checked, onClick }) {
   return (
     <div className="flex justify-between items-center bg-gray-50 rounded-lg p-4 mb-3">
